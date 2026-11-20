@@ -18,9 +18,11 @@
 | Good deals | 3,156 (66.5%) |
 | Fair listings | 613 (12.9%) |
 
-Average rent by city — Mumbai is in a league of its own:
+Every listing plotted — what it actually costs vs. what the model says is fair. Red above the line = overpriced, green below = good deal:
 
-![Average Rent by City](avg_rent_by_city.png)
+![Actual vs Predicted Rent](rent_fairness_scatter.png)
+
+Average rent by city: Mumbai ₹85,321 · Delhi ₹29,462 · Bangalore ₹24,966 · Chennai ₹21,614 · Hyderabad ₹20,555 · Kolkata ₹11,645.
 
 ## Honest notes — read this before trusting the verdicts
 
@@ -36,7 +38,7 @@ pip install -r requirements.txt
 python projectC_rent_fairness.py
 ```
 
-Keep `House_Rent_Dataset.csv` in the same folder. Outputs: `projectC_output_data.csv` (every listing with its predicted fair rent and verdict) and `avg_rent_by_city.png`.
+Keep `House_Rent_Dataset.csv` in the same folder. Outputs: `projectC_output_data.csv` (every listing with its predicted fair rent and verdict) and `rent_fairness_scatter.png` (actual vs. predicted rent, colour-coded by verdict; axes clipped at the 99th percentile so outlier listings don't flatten the chart).
 
 ## Dataset
 

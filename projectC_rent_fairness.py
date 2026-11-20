@@ -1,27 +1,34 @@
+# Project C: Rent Price Fairness Checker
+# Dataset: House Rent Prediction Dataset - kaggle.com/datasets/iamsouravbanerjee/house-rent-prediction-dataset
+
+import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_absolute_error
 
-df_raw = pd.read_csv("House_Rent_Dataset.csv")
-df = df_raw.rename(columns={
-    "City": "city", "BHK": "bhk", "Size": "size_sqft",
-    "Furnishing Status": "furnishing", "Rent": "rent"
-})[["city", "bhk", "size_sqft", "furnishing", "rent"]].copy()
+df = pd.read_csv("House_Rent_Dataset.csv")
+df = df.rename(columns={
+    "Size": "size_sqft",
+    "City": "city",
+    "Furnishing Status": "furnishing",
+    "Rent": "rent",
+    "BHK": "bhk",
+})
 
 print("Dataset shape:", df.shape)
-print(df.head())
+print(df[["city", "bhk", "size_sqft", "furnishing", "rent"]].head())
+
 print("\nAverage rent by city:")
 print(df.groupby("city")["rent"].mean().round(0).sort_values(ascending=False))
 
-df_model = pd.get_dummies(df, columns=["city", "furnishing"], drop_first=True)
+model_cols = ["bhk", "size_sqft", "city", "furnishing", "rent"]
+df_model = pd.get_dummies(df[model_cols], columns=["city", "furnishing"], drop_first=True)
+
 X = df_model.drop(columns="rent")
 y = df_model["rent"]
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=7)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=7)
 
 model = LinearRegression()
 model.fit(X_train, y_train)
@@ -30,9 +37,8 @@ preds = model.predict(X_test)
 print(f"\nModel R^2: {r2_score(y_test, preds):.3f}")
 print(f"Model MAE: {mean_absolute_error(y_test, preds):.0f}")
 
-df["predicted_fair_rent"] = model.predict(df_model.drop(columns="rent"))
-df["price_gap_pct"] = ((df["rent"] - df["predicted_fair_rent"])
-                       / df["predicted_fair_rent"] * 100).round(1)
+df["predicted_fair_rent"] = model.predict(X)
+df["price_gap_pct"] = ((df["rent"] - df["predicted_fair_rent"]) / df["predicted_fair_rent"] * 100).round(1)
 
 def flag(gap):
     if gap > 15:
@@ -44,29 +50,38 @@ def flag(gap):
 df["verdict"] = df["price_gap_pct"].apply(flag)
 
 print("\nSample listings with fairness verdict:")
-print(df[["city", "bhk", "size_sqft", "rent", "predicted_fair_rent",
-          "price_gap_pct", "verdict"]].head(10).to_string(index=False))
+print(df[["city", "bhk", "size_sqft", "rent", "predicted_fair_rent", "price_gap_pct", "verdict"]]
+      .head(10).to_string(index=False))
 
-over = (df["verdict"] == "OVERPRICED").sum()
-under = (df["verdict"] == "UNDERPRICED (good deal)").sum()
-fair = (df["verdict"] == "fair").sum()
-print(f"\nOverpriced listings: {over} ({over / len(df) * 100:.1f}%)")
-print(f"Good deals found:    {under} ({under / len(df) * 100:.1f}%)")
-print(f"Fair listings:       {fair} ({fair / len(df) * 100:.1f}%)")
-
-city_avg = df.groupby("city")["rent"].mean().sort_values(ascending=False)
-plt.figure(figsize=(10, 6))
-bars = plt.bar(city_avg.index, city_avg.values, color="#2b6cb0")
-for bar, val in zip(bars, city_avg.values):
-    plt.text(bar.get_x() + bar.get_width() / 2, val + 1800, f"Rs {val:,.0f}",
-             ha="center", fontsize=12, fontweight="bold")
-plt.ylabel("Average rent (Rs / month)", fontsize=12)
-plt.title("Average Rent by City", fontsize=15, fontweight="bold")
-plt.ylim(0, city_avg.max() * 1.15)
-plt.tight_layout()
-plt.savefig("avg_rent_by_city.png", dpi=200)
-plt.close()
+print(f"\nOverpriced listings: {(df['verdict']=='OVERPRICED').sum()} "
+      f"({(df['verdict']=='OVERPRICED').mean()*100:.1f}%)")
+print(f"Good deals found:    {(df['verdict']=='UNDERPRICED (good deal)').sum()} "
+      f"({(df['verdict']=='UNDERPRICED (good deal)').mean()*100:.1f}%)")
+print(f"Fair listings:       {(df['verdict']=='fair').sum()} "
+      f"({(df['verdict']=='fair').mean()*100:.1f}%)")
 
 df.to_csv("projectC_output_data.csv", index=False)
 print("\nSaved: projectC_output_data.csv")
-print("Graph saved: avg_rent_by_city.png")
+
+# Scatter: actual vs. predicted rent, color-coded by verdict
+colors = {"OVERPRICED": "#e74c3c", "fair": "#95a5a6", "UNDERPRICED (good deal)": "#2ecc71"}
+view_limit = df["rent"].quantile(0.99)  # clip so outlier listings don't flatten the chart
+
+plt.figure(figsize=(8, 7))
+for verdict, color in colors.items():
+    subset = df[df["verdict"] == verdict]
+    plt.scatter(subset["predicted_fair_rent"], subset["rent"],
+                s=12, alpha=0.5, label=verdict, color=color)
+
+plt.plot([0, view_limit], [0, view_limit], "k--", linewidth=1, label="Perfectly fair (y = x)")
+plt.xlim(0, view_limit)
+plt.ylim(0, view_limit)
+
+plt.xlabel("Model-predicted fair rent (₹)")
+plt.ylabel("Actual listed rent (₹)")
+plt.title("Rent Fairness Checker: Actual vs. Predicted Rent")
+plt.legend()
+plt.tight_layout()
+plt.savefig("rent_fairness_scatter.png", dpi=150)
+plt.close()
+print("\nSaved chart to rent_fairness_scatter.png")
